@@ -1,0 +1,448 @@
+Universidad Nacional Autónoma de México - Licenciatura en ciencias genómicas 
+
+Introducción a Ciencia de Datos 2021 - Tarea 6
+
+**Salvador González Juárez**
+
+Realizar los siguientes ejercicios.
+
+### 1. Abre el archivo “hersdata_model.csv”. 
+
+```{r}
+# Leer el archivo
+hersdata_model <- read.table("./hersdata_model.csv", sep = ",", header = T)
+setwd("/home/salvador/Documentos/Licenciatura_Ciencias_Genomicas/Cuarto_Semestre/Ciencia_Datos/Tarea_6")
+
+# Eliminar los valores nulos para no tener errores
+hersdata_model <- na.omit(hersdata_model)
+
+# Imprimir algunos registros
+head(hersdata_model)
+```
+
+---
+
+### 2. Ajusta un modelo lineal considerando el peso de las pacientes como la variable de respuesta y la medida de la cintura de las pacientes como variable predictora. Recuerda revisar la normalidad de la variable de respuesta y realizar las transformaciones que sean necesarias. Grafica la variable predictora y la variable de respuesta. Interpreta los resultados. 
+
+Primero, voy a revisar que los valores del peso y las medidas de la cintura estén en orden, y si no lo están, tendré que filtrar los registros conservando solo aquellos que no son extraños.
+
+```{r}
+# Resumen de los valores para el peso, la cintura y la edad
+summary(hersdata_model$weight)
+summary(hersdata_model$waist)
+```
+
+Los valores mínimos y máximos corresponden a valores posibles, por lo cual voy a conservar todos los registros. A continuación, voy a evaluar la normalidad de la variable de respuesta y de la variable predictora.
+
+```{r}
+# Importar las librerias requeridas
+library(ggplot2)  # Graficas
+library(bestNormalize)  # Normalizaciones
+```
+
+**Variable de respuesta: peso**
+
+```{r}
+# Grafica cuantil-cuantil del peso
+ggplot(hersdata_model, aes(sample = weight)) + 
+  stat_qq(alpha = 0.5) + 
+  stat_qq_line(color = "red") + 
+  labs(title = "Gráfica cuantil-cuantil del peso", x = "Teoréticos", y = "Muestra (kg)")
+
+# Histograma del peso
+ggplot(hersdata_model, aes(x = weight)) + 
+  geom_histogram(color = "black", fill = "white") + 
+  labs(title = "Histograma del peso", x = "Valor (kg)", y = "Frecuencia")
+
+# Evaluar la normalidad del peso
+ks.test(hersdata_model$weight, pnorm, mean(hersdata_model$weight), sd(hersdata_model$weight))
+```
+
+La gráfica cuantil-cuantil y el histograma del peso nos revelan que el conjunto de valores correspondientes al peso no tienen una distribución normal perfecta, pero sí una muy similar. La prueba contundente de que los datos no están normalizados es el test **Kolmogorov-Smirnov**, ya que el p-valor es menor a 0.05. En consecuencia, los valores del peso deben ser normalizados, pero antes voy a evaluar la normalidad de la variable predictora.
+
+**Variable predictora: circunferencia de la cintura**
+
+```{r}
+# Grafica cuantil-cuantil de la circunferencia de la cintura
+ggplot(hersdata_model, aes(sample = waist)) + 
+  stat_qq(alpha = 0.5) + 
+  stat_qq_line(color = "red") + 
+  labs(title = "Gráfica cuantil-cuantil de la circunferencia de la cintura", x = "Teoréticos", y = "Muestra (cm)")
+
+# Histograma de la circunferencia de la cintura
+ggplot(hersdata_model, aes(x = waist)) + 
+  geom_histogram(color = "black", fill = "white") + 
+  labs(title = "Histograma de la circunferencia de la cintura", x = "Valor (cm)", y = "Frecuencia")
+
+# Evaluar la normalidad de la circunferencia de la cintura
+ks.test(hersdata_model$waist, pnorm, mean(hersdata_model$waist), sd(hersdata_model$waist))
+```
+
+Las gráficas y el test de Kolmogorov-Smirnov revelan que los valores de la circunferencia de la cintura no siguen una distribución normal, pero sí una muy similar. No es necesario normalizar los valores de la variable predictora, por lo que sólo voy a normalizar los valores de la variable de respuesta. Es necesario buscar un método óptimo para normalizar los datos.
+
+**Normalización**
+
+```{r}
+# Buscar el mejor metodo de normalizacion
+set.seed(8)
+bestnorm <- bestNormalize(hersdata_model$weight)
+print(bestnorm)
+```
+
+Ahora que sé que método de normalización usar, voy a evaluar la normalidad de los valores normalizados de la variable de respuesta.
+
+```{r}
+# Almacenar los datos normalizados
+hersdata_model$weight_norm <- bestnorm$x.t
+
+# Grafica cuantil-cuantil del peso normalizado
+ggplot(hersdata_model, aes(sample = weight_norm)) + 
+  stat_qq(alpha = 0.5) + 
+  stat_qq_line(color = "red") + 
+  labs(title = "Gráfica cuantil-cuantil del peso normalizado", x = "Teoréticos", y = "Muestra")
+
+# Histograma del peso normalizado
+ggplot(hersdata_model, aes(x = weight_norm)) + 
+  geom_histogram(color = "black", fill = "white") + 
+  labs(title = "Histograma peso del normalizado", x = "Valor", y = "Frecuencia")
+
+# Evaluar la normalidad del peso normalizado
+ks.test(hersdata_model$weight_norm, pnorm, mean(hersdata_model$weight_norm), sd(hersdata_model$weight_norm))
+```
+
+Una vez que los valores del peso han sido normalizados las gráficas demuestran una total normalidad, la cual es confirmada por el p-valor mayor a 0.05 en el test Kolmogorov-Smirnov. Ahora es posible continuar con la generación del modelo.
+
+**Ajuste del modelo**
+
+```{r}
+# Ajustar el modelo para dos variables
+modelo <- lm(data = hersdata_model, weight_norm ~ waist)
+summary(modelo)
+```
+
+Del resumen del modelo se puede rescatar algunos datos importantes. Primero, el p-valor menor a 0.05 demuestra que sí hay una relación entre la circunferencia de la cintura y el peso. Además, la R² ajustada indica que el modelo es relativamente bueno, pero que podría ser mejor. Por último, voy a graficar la regresión lineal entre ambas variables.
+
+```{r}
+# Graficar la regresion lineal
+ggplot(hersdata_model, aes(waist, weight_norm)) + 
+  geom_point() +
+  geom_smooth(method = lm) +
+  labs(title = "Grafica de dispersión entre la cintura y el peso con datos normalizados", x = "Cintura (cm)", y = "Peso")
+```
+
+Se puede observar en la gráfica anterior que hay una tendencia de aumentar de peso cuando la circunferencia de la cintura incrementa. Sin embargo hay una dispersión importante a lo largo de la regresión, lo cual puede ser explicado por otros factores, además de la circunferencia de la cintura, que influyen en la determinación del peso de la persona.
+
+---
+
+### 3. Considerando el modelo predicho anteriormente, realiza la gráfica de la diferencia entre los valores observados y los esperados. Grafica los residuales contra los índices y verifica que éstos sean normales. Realiza un histograma y haz pruebas de normalidad. Interpreta los resultados. 
+
+Para verificar si el modelo es bueno, es necesario graficar la distancia que existe entre nuestras observaciones y los valores esperados (es decir, los residuales).
+
+```{r}
+# Almacenar los residuales y valores esperados del modelo
+hersdata_model$residuals <- modelo$residuals
+hersdata_model$predicted <- modelo$fitted.values
+
+# Graficar la diferencia entre los valores observados y los esperados
+ggplot(hersdata_model, aes(x = waist, y = weight_norm)) +
+  geom_smooth(method = lm) +
+  geom_segment(aes(xend = waist, yend = predicted)) + 
+  geom_point(aes(y = predicted)) +  
+  geom_point(color = "red") +  
+  labs(title = "Gráfica de la diferencia entre los valores observados y los esperados", x = "Cintura (cm)", y = "Peso")
+```
+
+En la gráfica anterior se observa como la dispersión de los valores del peso se alejan relativamente de los valores esperados, lo cual reitera mi observación previa de que hay más factores que influyen en el peso. A continuación, voy a evaluar la calidad del modelo graficando únicamente los residuales. 
+
+```{r}
+# Almacenar los indices de cada valor
+hersdata_model$index <- 1:nrow(hersdata_model)
+
+# Graficar los residuales
+ggplot(hersdata_model, aes(x = index, y = residuals)) + 
+  geom_point() +
+  labs(title = "Gráfica de residuales", x = "Índice", y = "Residuales")
+```
+
+La dispersión de los residuales no es totalmente aleatoria, ya que los puntos tienden a agruparse en el eje horizontal. Esto indica que existe un patron escondido que el modelo lineal no esta considerando, lo cual es acorde con las observaciones que hice previamente. Finalmente, un último metodo para verificar la validez del modelo, es verificar que los residuales sigan una distribución normal.
+
+
+```{r}
+# Grafica cuantil-cuantil de los residuales
+ggplot(hersdata_model, aes(sample = residuals)) + 
+  stat_qq(alpha = 0.5) + 
+  stat_qq_line(color = "red") + 
+  labs(title = "Gráfica cuantil-cuantil residuales", x = "Teoréticos", y = "Muestra")
+
+# Histograma de los residuales
+ggplot(hersdata_model, aes(x = residuals)) + 
+  geom_histogram(color = "black", fill = "white") + 
+  labs(title = "Histograma residuales", x = "Valor", y = "Frecuencia")
+
+# Evaluar la normalidad de los residuales
+ks.test(hersdata_model$residuals, pnorm, mean(hersdata_model$residuals), sd(hersdata_model$residuals))
+```
+
+Tanto las gráficas, como el test Kolmogorov-Smirnov, comprueban que los residuales siguen una distribución normal. Por lo tanto, todo indica a que el modelo fue hecho de forma correcta y tiene posibilidades de tener un potencial predictivo. Sin embargo, no considero que el modelo sea demasiado bueno, ya que como se dijo anteriormente, existen otros factores que el modelo no esta considerando, pero que son importantes en la determinación del peso de una persona. Esto tiene sentido ya que otras partes del cuerpo pueden crecer en volumen, aumentando el peso, pero sin incrementar la circunferencia de la cintura.
+
+---
+
+### 4. Predice los valores de peso para personas con las medidas de cintura presentes en el archivo “hersdata_predictions.csv”. Si realizaste una transformación de la variable de respuesta, recuerda devolver los valores a la escala original. 
+
+```{r}
+# Leer y filtrar los valores del archivo
+hersdata_pred <- read.table("./hersdata_predictions.csv", sep = ",", header = T)
+hersdata_pred <- na.omit(hersdata_pred)
+
+# Imprimir algunos registros
+head(hersdata_pred)
+```
+
+Una vez que he identificado los valores del peso y de la circunferencia de la cintura, voy a usar estos últimos para intentar predecir el peso correspondiente. 
+
+```{r}
+# Predecir el valor del peso con el valor de la circunferencia de la cintura
+pred_results <- predict(bestnorm, newdata = predict(modelo, newdata = data.frame(waist = hersdata_pred$waist)), inverse = TRUE)
+head(pred_results)
+```
+
+A continuación, voy a analizar la precisión del modelo considerando si los valores predichos del peso se acercan a los valores reales del peso. 
+
+```{r}
+# Esta funcion grafica la proporcion de aciertos y errores del modelo 
+comparar <- function(x, y, n){
+  count <- 0
+  total <- length(x)
+  for (i in 1:total) {
+    if ((x[i] < y[i] + n) & (x[i] > y[i] - n)) {
+      count =+ count + 1
+    }
+  }
+  
+  # Dibujar una grafica de barras
+  ggplot(data.frame(Var1 = c("Aciertos", "Errores"), Freq = c(count, total - count)), aes(x = Var1, y = Freq, fill = Var1)) +
+    geom_bar(stat = "identity") +
+    theme(axis.ticks.x = element_blank(), axis.text.x=element_blank()) +
+    scale_fill_discrete(name = "Estado", labels = c("Aciertos", "Errores")) +
+    labs(title = paste("Proporción de aciertos con margen de error de +/-", as.character(n), "kg", sep = " "), x = "", y = "Cantidad")
+}
+
+# Evaluar la precision del modelo con ciertos margenes de error
+comparar(pred_results, hersdata_pred$weight, 1)
+comparar(pred_results, hersdata_pred$weight, 2.5)
+comparar(pred_results, hersdata_pred$weight, 5)
+```
+
+En las gráficas anteriores se puede observar que el modelo no es muy preciso, ya que alcanza poco más de la mitad de aciertos únicamente cuando el margen de error es de +/- 5 kg, lo cual, tomando en cuenta el rango de los valores del peso, demuestra el modelo predictivo es poco informativo. En conclusión, hay una clara tendencia a incrementar el peso cuando aumenta la circunferencia, pero esta medida no es útil para predecir los valores del peso, pues hay muchos más factores biológicos que influyen en el peso de una persona.
+
+---
+
+### 5. Ajusta un modelo lineal múltiple para el peso contra las siguientes variables: age, raceth, smoking, drinkany, exercise, medcond, htnmeds, statins, diabetes, dmpills, insulin, waist, glucose, LDL, HDL, TG, SBP y DBP. Interpreta los resultados devueltos por summary(). No es posible realizar una gráfica para visualizar todas las variables, pero puedes apoyarte de gráficas individuales para tus interpretaciones (tip: compara las gráficas obtenidas con el peso y variables significativas contra las gráficas obtenidas con el peso y variables no significativas).
+
+Ya tengo los valores normalizados de la variable de respuesta, por lo que se puede continuar con el análisis. Como son varias variables predictoras, no voy a evaluar su normalidad y voy a confiar en que no hay errores en sus valores. A continuación, voy a ajustar el modelo con múltiples variables.
+
+```{r}
+# Ajustar el modelo para multiples variables
+modelo_multiple <- lm(data = hersdata_model, weight_norm ~ age + raceth + smoking + drinkany + exercise + medcond + htnmeds + statins + diabetes + dmpills + insulin + waist + glucose + LDL + HDL + TG + SBP + DBP)
+summary(modelo_multiple)
+```
+
+Del resumen anterior puedo recuperar que la R² ajustada indica que el modelo es moderadamente bueno, y que hay variables que si se relacionan fuertemente con el peso. Estas variables son la edad, el pertenecer a una raza catalogada como "otra", si la persona fuma, y la cirunferencia de la cintura. En menor medida también son significativas las variables de nivel de colesterol de baja densidad, la tensión arterial diastólica y si la persona esta sometida a una inulinoterapia. Todas las demás variables no tienen una relación significativa con el peso. A continuación, voy a graficar las variables en conjunto dependiendo de su nive de relación con la variable de peso. 
+
+```{r}
+# Importar una libreria para codificar 
+library(qdap)
+```
+
+```{r}
+# Cambiar el idioma de los valores de la categoria fumador
+hersdata_model$smoking <- multigsub(sort(unique(hersdata_model$smoking)), c("No", "Sí"), hersdata_model$smoking)
+
+# Graficar la relacion entre variables significativas
+ggplot(hersdata_model, aes(x = waist, y = weight_norm, color = age)) +
+  geom_smooth(method = lm) +  # añadimos la linea de regresion 
+  geom_point(aes(shape = as.factor(smoking))) +  # agregamos los puntos de las observaciones en color rojo
+  labs(title = "Modelo lineal significativo", x = "Circunferencia de la cintura (cm)", y = "Peso normalizado", color = "Edad", shape = "Fuma")
+```
+
+Grafiqué en conjunto las variables de edad, si la persona fuma y la circunferencia de la cintura porque están muy relacionadas con el peso. Omiti la variable sobre la raza porque considero que era muy poco informativa y las dimensiones de la gráfica ya no permitían otra variable más. Se puede observar en la gráfica la misma tendencia de que al incrementar la circunferencia de la cintura aumenta el peso. Además, aparentemente hay más personas que fuman con pesos bajos que con pesos altos. Finalmente, me es difícil visualizar como está relacionada la edad con el peso.
+
+```{r}
+# Cambiar el idioma de los valores de la categoria insulina
+hersdata_model$insulin <- multigsub(sort(unique(hersdata_model$insulin)), c("No", "Sí"), hersdata_model$insulin)
+
+# Graficar la relacion entre variables poco significativas
+ggplot(hersdata_model, aes(x = LDL, y = weight_norm, color = DBP)) +
+  geom_smooth(method = lm) +  # añadimos la linea de regresion 
+  geom_point(aes(shape = as.factor(insulin))) +  # agregamos los puntos de las observaciones en color rojo
+  labs(title = "Modelo lineal poco significativo", x = "Nivel de colesterol de baja densidad", y = "Peso normalizado", color = "Tensión arterial diastólica", shape = "Insulinoterapia")
+```
+
+Grafiqué en conjunto las variables de nivel de colesterol de baja densidad, si la persona está tomando una inulinoterapia y la tensión arterial diastólica porque están ligeramente relacionadas con el peso. Se puede observar en la gráfica que no hay una tendencia entre el aumento del peso y la dispersión de los valores del nivel de colesterol. Además, me es difícil visualizar un patrón que relacione la tensión arterial diatólica y la inmunoterapia con el peso.
+
+```{r}
+# Cambiar el idioma de los valores de la categoria diabetes
+hersdata_model$diabetes <- multigsub(sort(unique(hersdata_model$diabetes)), c("No", "Sí"), hersdata_model$diabetes)
+
+# Graficar la relacion entre no significativas
+ggplot(hersdata_model, aes(x = glucose, y = weight_norm, color = SBP)) +
+  geom_smooth(method = lm) +  # añadimos la linea de regresion 
+  geom_point(aes(shape = as.factor(diabetes))) +  # agregamos los puntos de las observaciones en color rojo
+  labs(title = "Modelo lineal no significativo", x = "Nivel de glucosa (mg/dL)", y = "Peso normalizado", color = "Tensión arterial sistólica", shape = "Diabetes")
+```
+
+Grafiqué en conjunto las variables de nivel de glucosa, si la persona tiene diabetes y la tensión arterial sistólica porque no están relacionadas con el peso y me parecieron interesantes. Se puede observar en la gráfica que no hay un patrón que relacione ninguna de las variables con el peso. Sin embargo, algo que me pareció curioso es que en esta gráfica si se puede ver una tendencia que relaciona el aumento del nivel de glucosa con la predisposición a tener diabetes, la cual será analizada en otro ejercicio.
+
+---
+
+### 6. Grafica los residuales contra los índices. Realiza un histograma y haz pruebas de normalidad. Interpreta los resultados. 
+
+Para evaluar la calidad del modelo múltiple voy a graficar únicamente los residuales y a verificar que los residuales sigan una distribución normal.
+
+```{r}
+# Guardar los residuales del modelo multiple
+hersdata_model$residuals2 <- modelo_multiple$residuals
+
+# Graficar los residuales del modelo multiple
+ggplot(hersdata_model, aes(x = index, y = residuals2)) + 
+  geom_point() +
+  labs(title = "Gráfica de residuales", x = "Índice", y = "Residuales")
+
+# Grafica cuantil-cuantil de los residuales del modelo multiple
+ggplot(hersdata_model, aes(sample = residuals2)) + 
+  stat_qq(alpha = 0.5) + 
+  stat_qq_line(color = "red") + 
+  labs(title = "Gráfica cuantil-cuantil residuales", x = "Teoréticos", y = "Muestra")
+
+# Histograma de los residuales del modelo multiple
+ggplot(hersdata_model, aes(x = residuals2)) + 
+  geom_histogram(color = "black", fill = "white") + 
+  labs(title = "Histograma residuales", x = "Valor", y = "Frecuencia")
+
+# Evaluar la normalidad de los residuales
+ks.test(hersdata_model$residuals2, pnorm, mean(hersdata_model$residuals2), sd(hersdata_model$residuals2))
+```
+
+La dispersión de los residuales no es totalmente aleatoria, ya que de nuevo los puntos tienden a agruparse en el eje horizontal. Esto podría indicar que existe un patron escondido que el modelo lineal no esta considerando. La gráfica cuantil-cuantil y el histograma de los residuales, asi como el test Kolmogorov-Smirnov, comprueban que los residuales siguen una distribución normal. Por lo tanto, todo indica a que el modelo fue hecho de forma correcta y tiene posibilidades de tener un potencial predictivo. Sin embargo, otra vez no considero que el modelo sea demasiado bueno, ya que los nuevos factores que el modelo esta considerando no parecen dar más información que pueda ser determinante en la predicción del peso. Esto tiene sentido ya que el peso puede incrementar o descender dependiendo de la combinación de muchos factores, incluso más allá de los que fueron considerados en este modelo múltiple.
+
+---
+
+### 7. Predice los valores de peso para todas las variables usando el archivo “hersdata_predictions.csv”. Si realizaste una transformación de la variable de respuesta, recuerda devolver los valores a la escala original. 
+
+A continuación, voy a analizar la precisión del modelo múltiple considerando si los valores predichos del peso se acercan a los valores reales del peso. 
+
+```{r}
+# Preparar los valores de las multiples variables
+newdata <- data.frame(age = hersdata_pred$age,
+  raceth = hersdata_pred$raceth,
+  smoking = hersdata_pred$smoking,
+  drinkany = hersdata_pred$drinkany,
+  exercise = hersdata_pred$exercise,
+  medcond = hersdata_pred$medcond,
+  htnmeds = hersdata_pred$htnmeds,
+  statins = hersdata_pred$statins,
+  diabetes = hersdata_pred$diabetes,
+  dmpills = hersdata_pred$dmpills,
+  insulin = hersdata_pred$insulin,
+  waist = hersdata_pred$waist,
+  glucose = hersdata_pred$glucose,
+  LDL = hersdata_pred$LDL,
+  HDL = hersdata_pred$HDL,
+  TG = hersdata_pred$TG,
+  SBP = hersdata_pred$SBP,
+  DBP = hersdata_pred$DBP)
+
+# Predecir el valor del peso con el valor de multiples variables
+pred_results <- predict(bestnorm, newdata = predict(modelo_multiple, newdata = newdata), inverse = TRUE)
+head(pred_results)
+```
+
+```{r}
+# Evaluar la precision del modelo con ciertos margenes de error
+comparar(pred_results, hersdata_pred$weight, 1)
+comparar(pred_results, hersdata_pred$weight, 2.5)
+comparar(pred_results, hersdata_pred$weight, 5)
+```
+
+
+En las gráficas anteriores se puede observar que el modelo múltiple tampoco es muy preciso, ya que alcanza poco más de la mitad de aciertos únicamente cuando el margen de error es de +/- 5 kg, lo cual tomando en cuenta el rango de los valores del peso da como resultado un modelo predictivo poco informativo. Cabe señalar que el modelo múltiple si mejoro la precisión del modelo simple, lo cual se debe a la consideración de más variables. En conclusión, hay algunas variables dentro del modelo que si describen alguna tendencia para predecir el peso, pero no es suficiente para predecir con exactitud los valores del peso, pues hay muchos más factores biológicos y combinaciones de variables que influyen en el peso de una persona.
+
+---
+
+### 8. Ajusta un modelo logístico para la variable diabetes contra la variable glucosa. Grafica la variable predictora y la variable de respuesta. Interpreta los resultados. 
+
+```{r}
+# Codificar los valores de diabetes para evitar errores
+hersdata_model$diabetes <- multigsub(sort(unique(hersdata_model$diabetes)), c(0, 1), hersdata_model$diabetes)
+
+# Ajustar el modelo logistico
+modelo_logistico <- glm(data = hersdata_model, as.numeric(diabetes) ~ glucose, family = "binomial")
+summary(modelo_logistico)
+```
+
+```{r}
+# Graficar la relación entre el nivel de glucosa y la diabetes
+ggplot(hersdata_model, aes(x = glucose, y = as.numeric(diabetes))) + 
+  geom_point(alpha=.5) +
+  stat_smooth(method = glm, se = FALSE, method.args = list(family = binomial)) +
+  labs(title = "Gráfica de dispersión entre el nivel de glucosa y la diabetes", x = "Nivel de glucosa (mg/dL)", y = "Diabetes")
+```
+
+En la gráfica anterior se observa que existe una pendiente muy pronunciada, lo cual podría indicar que ambas categorías son significativamente distintas con respecto al nivel de glucosa. Al analizar más a fondo, observo que los individuos que no presentan diabetes tienen niveles de glucosa que se establecen en un rango bajo. Por su parte, aquellas personas que presentan diabetes tienen una distribución muy amplia en el nivel de glucosa, alcanzando incluso niveles en el rango de alto. Por lo tanto, hay una relación entre no tener diabetes y tener niveles bajos de glucosa, pero esta tendencia se vuelve más incierta cuando la persona sí tiene diabetes.
+
+---
+
+### 9. Calcula la R2 de Hosmer y Lemeshow. ¿Qué tan buena es la variable para predecir la presencia de la enfermedad? 
+
+```{r}
+# Calcular la R2 de Hosmer y Lemeshow 
+(modelo_logistico$null.deviance - modelo_logistico$deviance) / modelo_logistico$null.deviance  
+```
+El valor de la R² de Hosmer y Lemeshow no es muy alto, lo que indica que el nivel de glucosa esta explicando aproximadamente el 0.55 de la varianza total de la variable de respuesta, es decir, la presencia o ausencia de diabetes. Por lo tanto, la variable del nivel de glucosa no es muy buena para predecir la diabetes, ya que como dije previamente, la distribución del nivel de glucosa en una persona con diabetes es muy amplia, y va desde el rango bajo hasta el rango alto, lo cual dificulta la predicción.
+
+---
+
+### 10. Grafica los residuales contra los índices y verifica que éstos sean normales. Realiza un histograma y haz pruebas de normalidad. Interpreta los resultados. 
+
+Para evaluar la calidad del modelo logístico voy a graficar únicamente los residuales y a verificar que los residuales sigan una distribución normal.
+
+```{r}
+# Guardar los residuales del modelo logistico
+hersdata_model$residuals3 <- modelo_logistico$residuals
+
+# Graficar los residuales del modelo logistico
+ggplot(hersdata_model, aes(x = index, y = residuals3)) + 
+  geom_point() +
+  labs(title = "Gráfica de residuales", x = "Índice", y = "Residuales")
+
+# Grafica cuantil-cuantil de los residuales del modelo logistico
+ggplot(hersdata_model, aes(sample = residuals3)) + 
+  stat_qq(alpha = 0.5) + 
+  stat_qq_line(color = "red") + 
+  labs(title = "Gráfica cuantil-cuantil residuales", x = "Teoréticos", y = "Muestra")
+
+# Histograma de los residuales del modelo logistico
+ggplot(hersdata_model, aes(x = residuals3)) + 
+  geom_histogram(color = "black", fill = "white") + 
+  labs(title = "Histograma residuales", x = "Valor", y = "Frecuencia")
+
+# Evaluar la normalidad de los residuales
+ks.test(hersdata_model$residuals3, pnorm, mean(hersdata_model$residuals3), sd(hersdata_model$residuals3))
+```
+
+La dispersión de los residuales parece estar siguiendo un patrón donde la mayoría tiene un valor de cero. Yo interpreto esto como un indicio de un patron escondido que el modelo lineal no esta considerando. La gráfica cuantil-cuantil y el histograma de los residuales, asi como el test Kolmogorov-Smirnov, comprueban que los residuales no siguen una distribución normal. Por lo tanto, todo indica a que el modelo no tiene un potencial predictivo. Esto va de acuerdo a mi observación de que el modelo tiene dificultades para diferenciar si una persona tiene diabetes por la amplia distribución del nivel de glucosa que caracteriza a la enfermedad. Esto tiene sentido ya que las personas con diabetes pueden eventualmente controlar sus niveles de glucosa. 
+
+---
+
+### 11. Predice la probabilidad de presentar diabetes para personas con las medidas de glucosa presentes en el archivo “hersdata_predictions.csv”.
+
+```{r}
+# Predecir la diabetes con el valor del nivel de glucosa
+pred_results <- predict(modelo_logistico, newdata = data.frame(glucose = hersdata_pred$glucose), type = "response")
+summary(pred_results)
+```
+
+El resumen de la probabilidad de presentar diabetes usando el modelo logístico confirma que no es muy preciso a la hora de predecir la ausencia o presencia de la enfermedad. A pesar de haber casos donde predice con completa seguridad, hay también casos donde la probabilidad es muy baja. El promedio de la probabilidad es de aproximadamente 0.26, lo cual quiere decir que el modelo no es muy bueno prediciendo.
+
+
+

@@ -1,0 +1,331 @@
+Universidad Nacional Autónoma de México - Licenciatura en ciencias genómicas 
+
+Introducción a Ciencia de Datos 2021 - Tarea 4
+
+**Salvador González Juárez**
+
+Continuando con el trabajo realizado en la tarea 2 (puedes cambiar de características si quieres).
+
+### 1. Realiza un análisis de varianza entre hombres y mujeres para una de las categorías que escogiste, sin comprobar consideraciones previas sólo los resultados de la tarea 2, justifica tu elección de prueba e interpreta los resultados.
+
+```{r}
+# Leer el archivo
+setwd("/home/salvador/Documentos/Licenciatura_Ciencias_Genomicas/Cuarto_Semestre/Ciencia_Datos/Tarea_4")
+data <- read.table("../Tarea_2/cardiovascular_disease.csv",sep = ",",header = T)
+
+# Eliminar los valores nulos para no tener errores
+data <- na.omit(data)
+```
+
+Analizaré la varianza del peso entre mujeres y hombres. Primero voy a hacer limpieza de los datos revisando que los valores del peso tengan sentido.
+
+```{r}
+# Ver el Resumen del peso
+summary(data$weight)
+```
+
+El valor máximo del peso es de 200 kg, mientras que el valor mínimo es de sólo 10 kg, los cuales son valores exageradamente raros y puede indicarnos que hay errores en este rubro. Para darme una idea de lo que deberían ser los umbrales para el peso voy a tomar en cuenta los valores de la edad.
+
+```{r}
+# Ver el resumen de la edad
+summary(data$age_year)
+```
+
+La edad minima en la muestra es de casi 30 años, lo que confirma que el valor mínimo del peso, encontrado previamente, es un error ya que no tiene sentido biológico. Tomando en cuenta los valores superiores e inferiores de los datos, decidí maniejar el umbral inferior de 40 kg y el superior de 165 kg para omitir los errores.
+
+```{r}
+# Filtrar los datos para que cumplan con valores viables
+data_filtered <- data[data$weight >= 40 & data$weight <= 165,]
+
+# Analizar los valores del peso filtrados
+summary(data_filtered$weight)
+
+# Calcular cuantos registros fueron omitidos 
+nrow(data) - nrow(data_filtered)
+```
+
+Fueron omitidos 78 registros, y ahora los valores corresponden más con la realidad. Esta todo listo para continuar con el análisis de la varianza del peso entre mujeres y hombres.
+
+```{r}
+# Importar la libreria requerida para realizar la codificacion de datos
+library(qdap)
+```
+
+```{r}
+# Establecer un tipo de variable valido para la categoria de genero, para no tener errores
+data_filtered$gender <- multigsub(sort(unique(data_filtered$gender)), c("Mujeres", "Hombres"), data_filtered$gender)
+table(data_filtered$gender)
+```
+
+Como se puede observar, los dos conjuntos (mujeres y hombres) tienen tamaños distintos. A continuación, voy a analizar la distribución de cada uno.
+
+```{r}
+# Calcular el promedio de cada conjunto
+aggregate(weight~gender, data = data_filtered, FUN = mean)
+```
+
+En promedio, los hombres son más pesados que las mujeres en este conjunto de datos.
+
+```{r}
+# Calcular la desviacion estandar de cada conjunto
+aggregate(weight~gender, data = data_filtered, FUN = sd)
+```
+
+La desviación estándar en ambos conjuntos es similar, lo cual podría darnos indicios de que comparten la misma distribución. A continuación, voy a aplicar el test **Lilliefors** para evaluar de forma analítica la normalidad en ambos conjuntos. Escogí esta prueba ya que es la alternativa a **Shapiro-Wilk** cuando el número de observaciones es mayor de 50, como es el caso. La Hipótesis nula (H0) de esta prueba es que la muestra tiene una distribución normal, y la hipótesis alternativa (HA) sería que las muestras no tienen una distribución normal. Por lo tanto, si el p-valor es menor a 0.05 se puede rechazar la H0 y aceptar la hipótesis alternativa.
+
+```{r}
+# Importar un a libreria requerida para realizar pruebas de normalidad
+library(nortest)
+```
+
+```{r}
+# Separar los datos por genero en estructuras distintas
+women <- data_filtered[data_filtered$gender=="Mujeres",]
+men <- data_filtered[data_filtered$gender=="Hombres",]
+
+# Comprobar la normalidad de nuestros datos
+lillie.test(women$weight)
+lillie.test(men$weight)
+```
+
+El p-valor de la prueba Lillefors aplicada en ambos conjuntos es menor a 2.2e-16, lo cual indica que la distribución de ambos conjuntos definitivamente no es normal. Este hecho influye profundamente en la decisión de cuál test debe usarse para analizar la distribución de la varianza, ya que, como los conjuntos que se comparan no son de tipo normal, es recomendable recurrir a un test que compare la mediana de la varianza. Por lo tanto, decidí usar el test de **Fligner-Killeen**, ya que es un test no paramétrico que compara las varianzas basándose en la mediana y es una alternativa cuando no se cumple la condición de normalidad en las muestras.
+
+```{r}
+# Comprobar la varianza constante entre grupos (homocedasticidad)
+fligner.test(weight~gender, data_filtered)
+```
+
+El test de Fligner-Killeen considera como hipótesis nula que la varianza es igual entre los grupos y como hipótesis alternativa que no lo es. El p-value que obtuve es mayor que 0.05, por lo que la varianza de la altura entre mujeres y hombres es igual y por lo tanto no se cumple la homocedasticidad. Para anaizar la diferencia de la varianza entre ambos conjuntos, decidí usar el test **Wilcoxon rank-sum**, el cual es un test no paramétrico que contrasta si dos muestras proceden de poblaciones equidistribuidas. Elegí esta prueba ya que los datos cumplen con todas sus condiciones:
+
+    - Los datos son independientes.
+    - Los datos de peso son ordinales.
+    - El test acepta muestras que no se distribuyen de forma normal.
+    - Ambos conjuntos tienen una distribución muy similar, reflejada en su varianza y asimetría.
+    - Se cumple con la homocedasticidad.
+
+Se empleará la función *wilcox_test()* del paquete coin, ya que los tamaños muestrales son mayores de 20.
+
+```{r}
+# Importar la libreria requerida para realizar el analisis de la varianza
+library(coin)
+```
+
+```{r}
+# Es necesario crear un dataframe para realizar el test
+wilcox_dt <- data.frame(weight = data_filtered$weight, gender = data_filtered$gender)
+
+# Codificar los valores del genero en el nuevo dataframe
+wilcox_dt$gender <- gsub("Mujeres", "M", wilcox_dt$gender)
+wilcox_dt$gender <- gsub("Hombres", "H", wilcox_dt$gender)
+
+# Aplicar el test Wilcoxon rank-sum en los datos
+wilcox_test(weight ~ as.factor(gender), data = wilcox_dt, conf.int=0.95)
+```
+
+Como podemos observar el p-valor de esta prueba es menor a 0.05, por lo que se puede intuir que existe una diferencia significativa en el peso entre mujeres y hombres.
+
+---
+
+### 2. Realiza un análisis para confirmar las consideraciones previas (normalidad y Homocedasticidad). Interpreta tus resultados y justifica tu elección de prueba. ¿Tu resultado del punto 1 es confiable? ¿Qué análisis es el más adecuado para tus datos? Explica.
+
+Para comprobar mis resultados previos, haré pruebas visuales y de hipótesis para explorar la normalidad de los datos.
+
+```{r}
+# Importar la libreria requerida para graficar
+library(ggplot2)
+```
+
+```{r}
+# Graficar la distribucion de ambos conjuntos en un grafico de boxplot
+ggplot(data_filtered, aes(x = gender, y = weight, color = gender)) +
+    geom_boxplot() +
+    theme(legend.position = "none") +
+    labs(title = "Boxplot del peso y del género", x = "Género", y = "Peso (kg)") +
+    scale_x_discrete(labels = sort(unique(data_filtered$gender)))
+```
+
+La gráfica de boxplot es un método visual que resume la distribución de los datos. En ella se reitera que los hombres tienen en promedio un peso mayor al de las mujeres, además de que aparentemente ambos conjuntos tienen la misma distribución.
+
+```{r}
+# Graficar cuantil-cuantil de cada uno de los conjuntos
+par(mfrow = c(1,2))
+qqnorm(women$weight, main = "Mujeres")
+qqline(women$weight)
+qqnorm(men$weight, main = "Hombres")
+qqline(men$weight)
+```
+
+```{r}
+# Importar la libreria para analizar la asimetria
+library(e1071)
+```
+
+```{r}
+# Calcular la asimetria de las distribuciones
+skewness(women$weight) 
+skewness(men$weight) 
+```
+
+La gráfica cuantil-cuantil demuestra que la distribución de ambos conjuntos no es totalmente normal, principalmente en el extremo superior. El valor de *skewness* de ambos conjuntos es mayor a 0.5, por lo cual podemos concluir que los datos son asimétricos y positivos. En conjunto estas pruebas reafirman mis conclusiones del ejercicio uno, ya que con ellas compruebo que los datos no tienen una distribución normal y poseen una distribución similar. Estas dos cualidades son requeridas en el test de Wilcoxon rank-sum, y por lo tanto, la prueba es adecuada y puedo confiar en su resultado.
+
+---
+
+### 3. Concluye si existe una diferencia entre hombres y mujeres para la característica que escogiste y porque crees que es esto.
+
+El resultado que obtuve al aplicar el test de Wilcoxon rank-sum en mis datos puede ser interpretado como una diferencia significativa entre mujeres y hombres con respecto al peso. Los datos de esta población indican que los hombres tienden a pesar más que las mujeres. Esto podría deberse a que para el mismo índice de masa corporal, los hombres tenderán a tener más masa libre de grasa (músculo) y una masa de grasa menor, y por lo tanto, tienden a pesar más. 
+
+---
+
+### 4. Repite el punto 1 y 2 pero esta vez separa los datos originales por una variable categórica de más de 2 posibilidades y otra categoría que gustes. Justifica tu elección de prueba e interpreta los resultados.
+
+Decidí usar como variable categórica el nivel de colesterol, y en ella comparar los valores de presión sistólica (PS). Primero, voy a realizar la limpieza de los datos a partir de los valores de PS.
+
+```{r}
+# Ver el resumen de la PS
+summary(data$ap_hi)
+```
+
+De nuevo, los valores extremos de la PS parecen indicarnos que hay errores en los registros, ya que no tienen sentido biológico. Tomando en cuenta los valores superiores e inferiores de los datos, decidí maniejar el umbral inferior de 60 mmHg y el superior de 225 mmHg para omitir los errores.
+
+```{r}
+# Filtrar los datos para que cumplan con valores viables
+data_filtered <- data[data$ap_hi <= 225 & data$ap_hi >= 60,]
+
+# Analizar los valores de la PI filtrados
+summary(data_filtered$ap_hi)
+
+# Calcular cuantos registros fueron omitidos 
+nrow(data) - nrow(data_filtered)
+```
+
+Fueron omitidos 236 registros, y ahora los valores corresponden más con la realidad. Esta todo listo para continuar con el análisis de la varianza de la PI entre las categorías de nivel de colesterol.
+
+```{r}
+# Establecer un tipo de variable valido para la categoria de colesterol, para no tener errores
+data_filtered$cholesterol <- multigsub(sort(unique(data_filtered$cholesterol)), c("Normal", "Arriba de lo normal", "Muy arriba de lo normal"), data_filtered$cholesterol)
+table(data_filtered$cholesterol)
+```
+
+Como se puede observar, los conjuntos tienen tamaños distintos. A continuación, voy a analizar la distribución de cada uno.
+
+```{r}
+# Calcular el promedio de cada conjunto
+aggregate(ap_hi~cholesterol, data = data_filtered, FUN = mean)
+```
+
+En promedio, las personas que tienen un nivel de colesterol normal presentan un nivel de PS mucho más bajo que aquellos con un nivel de colesterol arriba de lo normal, y estos últimos tienen un nivel de PS ligeramente más bajo que los individuos con un nivel de colesterol muy arriba de lo normal. 
+
+```{r}
+# Calcular la desviacion estandar de cada conjunto
+aggregate(ap_hi~cholesterol, data = data_filtered, FUN = sd)
+```
+
+La desviación estándar en cada conjuntos es ligeramente similar, lo cual podría darnos indicios de que comparten la misma distribución. Para comprobarlo, haré pruebas visuales y de hipótesis para explorar la normalidad de los datos.
+
+```{r}
+# Graficar la distribucion de cada conjuntos en un grafico de boxplot
+ggplot(data_filtered, aes(x = cholesterol, y = ap_hi, color = cholesterol)) +
+    geom_boxplot() +
+    theme(legend.position = "none") +
+    labs(title = "Boxplot de la presión sistólica y del nivel de colesterol", x = "Nivel de colesterol", y = "Presion sistólica (mmHg)") +
+    scale_x_discrete(labels = sort(unique(data_filtered$cholesterol)))
+```
+
+La gráfica reitera el patrón donde a mayor nivel de colesterol mayor PS, además de que aparentemente los conjuntos tienen una distribución ligeramente similar.
+
+```{r}
+# Separar los datos por nivel de colesterocholesterol en estructuras distintas
+normal <- data_filtered[data_filtered$cholesterol == "Normal",]
+a_normal <- data_filtered[data_filtered$cholesterol == "Arriba de lo normal",]
+va_normal <- data_filtered[data_filtered$cholesterol == "Muy arriba de lo normal",]
+
+# Graficar cuantil-cuantil de cada uno de los conjuntos
+par(mfrow = c(1,3))
+qqnorm(normal$ap_hi, main = "Normal")
+qqline(normal$ap_hi)
+qqnorm(a_normal$ap_hi, main = "Arriba de lo normal")
+qqline(a_normal$ap_hi)
+qqnorm(va_normal$ap_hi, main = "Muy arriba de lo normal")
+qqline(va_normal$ap_hi)
+```
+
+```{r}
+# Calcular la asimetria de las distribuciones
+skewness(normal$ap_hi) 
+skewness(a_normal$ap_hi) 
+skewness(va_normal$ap_hi) 
+```
+
+La gráfica cuantil-cuantil demuestra que la distribución de todos los conjuntos no es normal. El valor de *skewness* de todos los conjuntos es mayor a 0.5, por lo cual podemos concluir que los datos son asimétricos y positivos. A continuación, voy a volver a aplicar el test Lilliefors para evaluar de forma analítica la normalidad en todos los conjuntos. 
+
+```{r}
+# Comprobar la normalidad de nuestros datos
+lillie.test(normal$ap_hi)
+lillie.test(a_normal$ap_hi)
+lillie.test(va_normal$ap_hi)
+```
+
+El p-valor de la prueba Lillefors aplicada en todos los conjuntos es menor a 2.2e-16, lo cual indica que, nuevamente, la distribución de todos los conjuntos definitivamente no es normal. Como los conjuntos que se comparan no son de tipo normal, es recomendable recurrir a un test que compare la mediana de la varianza y que también considere más de dos conjuntos. Por lo tanto, decidí usar el test de **Levene**, ya que es un test que se caracteriza por poder comparar 2 o más poblaciones y por permitir elegir como estadístico de centralidad a la mediana. 
+
+```{r}
+# Importar la libreria requerida para realizar el test de Levene
+library(car)
+```
+
+```{r}
+# Comprobar la varianza constante entre grupos (homocedasticidad)
+leveneTest(y = data_filtered$ap_hi, group = data_filtered$cholesterol, center = "median")
+```
+
+El test de Levene considera como hipótesis nula que la varianza es igual entre los grupos y como hipótesis alternativa que no lo es. El p-value que obtuve es menor que 0.05, por lo que la varianza de la PS entre las distintas categorías del nivel de colesterol no es igual y por lo tanto no se cumple la homocedasticidad. Voy a intentar normalizar los datos en búsqueda de cambiar de estrategia, ya que hasta este punto no habría algún test de los que vimos en clases que pueda ser usado sin faltar a alguna de sus condiciones. A continuación voy a buscar la mejor manera de normalizar los datos.
+
+```{r}
+# Importar la libreria para hallar el mejor metodo de normalizacion
+library(bestNormalize)
+```
+
+```{r}
+set.seed(4)
+# Buscar el mejor metodo de normalizacion
+bestNormalize(normal$ap_hi)
+bestNormalize(a_normal$ap_hi)
+bestNormalize(va_normal$ap_hi)
+```
+
+Todos los datos serán normalizados utilizando la función *orderNorm()*, la cual fue la que se indicó en la prueba anterior.
+
+```{r}
+# Aplicar la funcion de normalizacion indicada y guardar los datos en el dataframe
+normal$ap_hi_norm <- orderNorm(normal$ap_hi)$x.t
+a_normal$ap_hi_norm <- orderNorm(a_normal$ap_hi)$x.t
+va_normal$ap_hi_norm <- orderNorm(va_normal$ap_hi)$x.t
+```
+
+Ahora, voy a evaluar la normalidad de los datos mediante la gráfica cuantil-cuantil y la prueba de Lilliefors, para ver si la normalización funcionó.
+
+```{r}
+# Graficar cuantil-cuantil de cada uno de los conjuntos
+par(mfrow = c(1,3))
+qqnorm(normal$ap_hi_norm, main = "Normal")
+qqline(normal$ap_hi_norm)
+qqnorm(a_normal$ap_hi_norm, main = "Arriba de lo normal")
+qqline(a_normal$ap_hi_norm)
+qqnorm(va_normal$ap_hi_norm, main = "Muy arriba de lo normal")
+qqline(va_normal$ap_hi_norm)
+```
+
+```{r}
+# Comprobar la normalidad de nuestros datos
+lillie.test(normal$ap_hi_norm)
+lillie.test(a_normal$ap_hi_norm)
+lillie.test(va_normal$ap_hi_norm)
+```
+
+Como se puede observar en ambas pruebas, los datos normalizados en realidad no possen una distribución normal, por lo que será imposible cambiar de estrategia. Decidí usar el test de **Kruskal-Wallis**, también conocido como test H, el cual es la alternativa no paramétrica al test ANOVA para datos no pareados. Mi elección se debe a que este es el test que mejor se acopla con los datos. Sin embargo, al ser una extensión del test de Wilcoxon rank-sum para más de dos grupos, se requiere que los datos cumplan con homocedasticidad, lo cual no es el caso. Por lo tanto, aplicaré esta prueba a pesar de que su resultado pueda ser erróneo. 
+
+```{r}
+# Aplicar el test Krustal-Wallis en los datos
+kruskal.test(cholesterol ~ ap_hi, data = data_filtered)
+```
+El test de Kruskal-Wallis contrasta si las diferentes muestras están equidistribuidas y que por lo tanto pertenecen a una misma distribución (población). En esta prueba, la H0 considera que todas las muestras provienen de la misma población, mientras que la HA dice que al menos una muestra proviene de una población con una distribución distinta. Como obtuve un p-valor menor a 0.05, entonces puedo decir que existe una diferencia significativa entre la PS y el nivel de colesterol. Por lo tanto, este resultado confirmaría el hecho de que a mayor nivel de colesterol mayor PS. Esto tiene un sentido biológico, ya que el aumento en los niveles de colesterol incrementa de forma gradual y continua el riesgo vascular de los pacientes hipertensos, además de contribuir también al desarrollo y mantenimiento de la hipertensión arterial.
+

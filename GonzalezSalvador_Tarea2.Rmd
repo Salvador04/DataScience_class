@@ -1,0 +1,206 @@
+Universidad Nacional Autónoma de México - Licenciatura en ciencias genómicas 
+
+Introducción a Ciencia de Datos 2021 - Tarea 2
+
+**Salvador González Juárez**
+
+Utilizando el archivo “cardiovascular_disease.csv” de la tarea 1, realiza lo siguiente:
+
+### Escoger 3 características (válidas para los análisis) 
+
+Primero debemos visualizar el tipo de datos que contiene el archivo.
+
+```{r}
+# Leer el archivo e imprimir algunos registros
+setwd("/home/salvador/Documentos/Licenciatura_Ciencias_Genomicas/Cuarto_Semestre/Ciencia_Datos/Tarea_2")
+data <- read.table("cardiovascular_disease.csv",sep = ",",header = T)
+head(data,n = 5)
+```
+
+Con el objetivo de analizar la distribución de los datos, es necesario elegir categorías cuyos datos sean numéricos. Por lo tanto he decidido elegir las categorías **Peso**, **Estatura** y **Edad por días**.
+
+### Separa tus datos por género (genera 2 conjuntos).
+
+Se debe comprobar que las dimensiones de los conjuntos esten en orden con respecto a las dimensiones de los datos originales.
+
+```{r}
+# Eliminar los valores nulos para no tener errores
+data <- na.omit(data)
+
+# Establecer un tipo de variable valido para la categoria de genero, para no tener errores
+data$gender <- as.character(data$gender)
+
+# Visualizar las dimensiones de los datos originales 
+dim(data)
+table(data$gender)
+
+# Separar los datos por genero
+women <- data[data$gender==1,]
+men <- data[data$gender==2,]
+
+# Visualizar las dimensiones de los conjuntos ya separados
+dim(women)
+dim(men)
+```
+
+Se puede observar que las dimensiones de los conjuntos estan en orden con la división que realice. Por lo tanto, se puede continuar con los ejercicios.
+
+---
+
+## 1. Calcula las medidas de tendencia central, cuartiles y la desviación estándar para tus 3 características. 
+
+Primero defino una función para que el código no sea redundante.
+
+```{r}
+# La siguiente funcion obtiene todas las medidas solicitadas para una categoria especifica de un conjunto de datos
+measures <- function(dataset){
+  
+  # Calcular la media
+  media <- mean(dataset)
+  
+  # Calcular la moda
+  dt <- data.frame(table(dataset))
+  moda <- dt[which.max(dt$Freq),1]
+  
+  # Calcular la mediana
+  mediana <- median(dataset)
+  
+  # Calcular los valores de todos los cuartiles
+  cuartiles <- quantile(dataset)
+  names(cuartiles) <- NULL
+  
+  # Calcular la desviacion estandar
+  desEst <- sd(dataset)
+  
+  return(c(Media=media, Moda=moda, Mediana=mediana, Primer_cuartil=cuartiles[2], Segundo_cuartil=cuartiles[3], Tercer_cuartil=cuartiles[4], DS=desEst))
+}
+```
+
+A continuación, voy a presentar las medidas para cada categoría, contrastando las diferencias entre mujeres y hombres.
+
+### Peso
+
+```{r}
+# Calcular las medidas para el peso en mujeres y hombres
+weight <- data.frame(measures(women$weight), measures(men$weight))
+colnames(weight) <- c("Mujeres", "Hombres")
+weight
+```
+
+**Se puede observar que a pesar de tener una moda más alta, en todas las demás medidas las mujeres tienen valores más bajos que los de los hombres, lo cual nos dice que los hombres tienen una tendencia a ser ligeramente más pesados. Cabe destacar que la desviación estándar en ambos conjuntos es muy similar.**
+
+### Estatura
+
+```{r}
+# Calcular las medidas para la estatura en mujeres y hombres
+height <- data.frame(measures(women$height), measures(men$height))
+colnames(height) <- c("Mujeres", "Hombres")
+height
+```
+
+**Se puede observar que a pesar de tener una moda más alta, en todas las demás medidas las mujeres tienen valores más bajos que los de los hombres, lo cual nos dice que los hombres tienen una tendencia a ser más altos. Cabe destacar que la desviación estándar en ambos conjuntos es muy similar.**
+
+### Edad
+
+```{r}
+# Calcular las medidas para la edad en mujeres y hombres
+age <- data.frame(measures(women$age_year), measures(men$age_year))
+colnames(age) <- c("Mujeres", "Hombres")
+age
+```
+
+**Se puede observar que en todas las medidas ambos conjuntos tienen valores muy parecidos, lo cual quiere decir que en el estudio hizo énfasis en que los pacientes de ambos géneros tuvieran un cierto rango de edad. Cabe destacar que las desviaciones estándar de ambos conjuntos son muy similares, pero considerablemente altas en relación con la distribución de los valores.**
+
+---
+
+### 2. Genera un gráfico para observar la distribución de datos.
+
+Voy a utilizar el paquete *ggplot2* para realizar las gráficas.
+
+```{r}
+# Importar una libreria para graficar
+library(ggplot2)
+```
+
+Decidí realizar gráficas de tipo **boxplot** para representar la distribución de los datos y al mismo tiempo comparar entre ambos conjuntos.
+
+```{r}
+# Graficar la distribucion del peso comparando ambos conjuntos 
+ggplot(data, aes(x = gender, y = weight, color = gender)) + 
+  geom_boxplot() + 
+  theme(legend.position = "none") +
+  labs(title = "Boxplot del peso y del genero", x = "Genero", y = "Peso (kg)") +
+  scale_x_discrete(labels = c("Mujeres", "Hombres"))
+
+# Graficar la distribucion de la estatura comparando ambos conjuntos
+ggplot(data, aes(x = gender, y = height, color = gender)) + 
+  geom_boxplot() + 
+  theme(legend.position = "none") +
+  labs(title = "Boxplot de la altura y del genero", x = "Genero", y = "Altura (cm)") +
+  scale_x_discrete(labels = c("Mujeres", "Hombres")) 
+
+# Graficar la distribucion de la edad comparando ambos conjuntos
+ggplot(data, aes(x = gender, y = age_year, color = gender)) + 
+  geom_boxplot() + 
+  theme(legend.position = "none") +
+  labs(title = "Boxplot de la edad y del genero", x = "Genero", y = "Edad (años)") +
+  scale_x_discrete(labels = c("Mujeres", "Hombres")) 
+```
+
+**En este apartado puedo concluir que la interpretación de los boxplot para cada comparación van de acuerdo con la interpretación hecha con los valores obtenidos en el inciso anterior.**
+
+---
+
+### 3. Compara los resultados de tus 2 conjuntos, ¿existe alguna diferencia entre hombres y mujeres? 
+
+Si existen diferencias entre ambos conjuntos, las resumire a continuación en los siguientes puntos:
+
+**1. Los hombres tienen una distribución del peso que tiende a ser ligeramente más alta que la distribución del peso de las mujeres.**
+
+**2. Las mujeres tienen una distribución de la estatura que tiende a ser ligeramente más baja que la distribución de la estatura en los hombres.**
+    
+Hay que recordar que no hay diferencias significativas entre los grupos para la categoría de edad.
+
+---
+
+### 4. Genera correlación entre tus 3  características para uno de los conjuntos y genera un gráfico para observar. Interpreta tus resultados y comenta ¿por qué crees que hay o no correlación?.
+
+Para medir la correlación entre las variables voy a calcular el valor de correlación y graficar la dispersión.
+
+```{r}
+# Mostrar la correlacion entre las categorias
+dtCorr<-data.frame(Peso=women$weight, Altura=women$height, Edad=women$age_year)
+cor(dtCorr,method = "p")
+```
+
+```{r}
+# Grafica la disperoción de los valores respecto a las tres categorías.
+pairs(dtCorr)
+```
+
+**Se puede apreciar que los valores de correlación entre distintas variables están muy alejados de 1, lo cual quiere decir que no hay correlación entre las variables. Este hecho también se ve reflejado en la gráfica, donde la dispersión no sigue un patrón que pueda indicarnos que hay correlación. Cuando elegí las variables creí que habría alguna correlación con la edad, ya que las personas tienden a pesar más o ser más altos conforme crecen. Sin embargo esto es cierto solo en etapas tempranas de la niñez y la adolescencia. Sin embargo, los datos con los que estoy trabajando corresponden en su mayoría de paciente ya adultos. Por lo tanto, para cada edad de la adultez pueden haber personas con un peso desde muy bajo hasta muy alto, o desde una estatura baja a una alta. Esto explica la forma en la que se distribuyen los puntos en el gráfico de dispersión.**
+
+---
+
+### 5. Con los datos (media y ds) de una de tus características genera una distribución normal y compárala con tus datos. 
+
+La importancia de la distribución normal radica en que permite modelar numerosos fenómenos naturales, sociales y psicológicos. Mientras que los mecanismos que subyacen a gran parte de este tipo de fenómenos son desconocidos, por la enorme cantidad de variables incontrolables que en ellos intervienen, el uso del modelo normal puede justificarse asumiendo que cada observación se obtiene como la suma de unas pocas causas independientes. 
+
+```{r}
+# Generar un arreglo con una distribucion normal
+set.seed(10)
+dnormal <- rnorm(n=1000, mean=weight$Mujeres[1], sd=weight$Mujeres[7])
+
+# Calcular la funcion de densiadad
+x <- seq(0, 1020, length=1020)
+distNorm <- dnorm(x=x, mean=weight$Mujeres[1], sd=weight$Mujeres[7])
+
+# Graficar los datos
+par(mfrow=c(1, 2))
+hist(dnormal, main="Distribucion normal simulada", freq=F, xlab="Peso (kg)", ylab="Densidad")
+lines(x, distNorm, col="blue", lty = 1, lwd = 2)
+hist(women$weight, main="Distribucion normal con los datos", freq = F, xlab="Peso (kg)", ylab="Densidad")
+lines(x, distNorm, col="blue", lty=1, lwd=2)
+```
+
+**Finalmente, podemos concluir a partir de la gráfica, que nuestros datos originales se ajustan a una distribución normal, ya que únicamente hay un pequeño sesgo hacia la izquierda en la posición del pico de los datos (media). Esto quiere decir que, como era de esperarse por el rango biológico del peso en un conjunto de individuos, el peso en las personas se ajusta a una distribución normal.**

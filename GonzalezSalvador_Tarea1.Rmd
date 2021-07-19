@@ -1,0 +1,190 @@
+Universidad Nacional Autónoma de México - Licenciatura en ciencias genómicas 
+
+Introducción a Ciencia de Datos 2021 - Tarea 1
+
+**Salvador González Juárez**
+
+Todas las gráficas deben tener título, nombres de los ejes y categorías modificados y colores, además de ser generadas con la librería ggplot2. Sube el archivo .Rmd y el HTML o PDF a cursos. 
+
+### 1. Abre el archivo “cardiovascular_disease.csv” encontrado en cursos en R (todos los descriptores del dataset se encuentran en el archivo llamado “attributes.txt”). 
+
+```{r}
+# Llamar a la libreria requerida para generar las graficas
+library(ggplot2)
+
+# Leemos el archivo que vamos a visualizar
+setwd("/home/salvador/Documentos/Licenciatura_Ciencias_Genomicas/Cuarto_Semestre/Ciencia_Datos/Tarea_1")
+data <- read.csv("cardiovascular_disease.csv")
+
+# Imprimimos las primeras lineas de los datos para saber que tipo de informacion hay 
+head(data)
+```
+
+### 2. Realiza una gráfica de barras con el número de pacientes que se encuentran en cada grupo discreto de la variable colesterol. 
+
+```{r}
+# Realizar un cambio en el tipo de variable para que se interpretada de la forma correcta
+data$cholesterol <- as.character(data$cholesterol)
+
+# Sacar las cuentas de pacientes para cada grupo discreto de la variable colesterol
+counts <- as.data.frame(table(data$cholesterol))
+
+# Convertir la matriz en un dataframe y hacr que los nombres de las filas sean una columna
+counts$cholesterol <- rownames(counts)
+
+# Dibujar la grafica de barras
+ggplot(counts, aes(x = Var1, y = Freq, fill = Var1)) +
+  geom_bar(stat = "identity") +
+  theme(axis.ticks.x = element_blank(), axis.text.x=element_blank()) +
+  scale_fill_discrete(name = "Nivel de colesterol", labels = c("Normal", "Arriba de lo normal", "Muy arriba de lo normal")) +
+  labs(title = "Numero de pacientes pertenecientes a cada grupo de\nnivel de colesterol", x = "", y = "Número de pacientes")
+```
+
+### 3. Realiza una gráfica de barras con el número de pacientes que se encuentran en cada grupo discreto de la variable colesterol agrupada por ausencia o presencia de una enfermedad cardiovascular. ¿Encuentras alguna asociación entre ambas variables?
+
+```{r}
+# Sacar las cuentas de pacientes para cada grupo de nivel de colesterol y enfermedad
+counts2 <- as.data.frame(tapply(data$cholesterol, 
+                  list(data$cholesterol, data$cardio), 
+                  table))
+# Hacemos que los nombres de las filas sean una columna
+counts2$cholesterol <- rownames(counts2)
+
+# Transformar el dataframe al formato long
+counts2 <- reshape(counts2,
+        direction = "long", 
+        varying = list(names(counts2)[1:2]), 
+        v.names = "Counts", 
+        idvar = "Cholesterol", 
+        timevar = "Disease",
+        times = c("0", "1"))
+row.names(counts2) <- NULL
+
+# Dibujar la gráfica de barras lado a lado
+ggplot(counts2, aes(x = Cholesterol, y = Counts, fill = Disease)) +
+  geom_bar(stat = "identity", position=position_dodge()) +
+  coord_flip() +
+  scale_fill_discrete(name = "Enfermedad", labels = c("No", "Sí")) +
+  scale_x_discrete(labels = c("Normal", "Arriba de lo normal", "Muy arriba de lo normal")) +
+  labs(title = "Numero de pacientes sanos y enfermos en relacion\ncon el nivel de colesterol", x = "Nivel de colesterol", y = "Número de pacientes")
+```
+
+```
+La gráfica nos indica que aquellas personas con un nivel de colesterol por encima de lo normal son más propensos a padecer alguna enfermedad cardiovascular, en comparación con aquellos individuos que poseen un nivel de colesterol normal.
+```
+
+### 4. Realiza un histograma de la variable estatura y coloca una gráfica de densidad encima. 
+
+```{r}
+# Dibujar una grafica de tipo histograma con densidad
+ggplot(data, aes(x = height)) + 
+  geom_histogram(aes(y=..density..), binwidth = 2, color = "black", fill = "white") +
+  geom_density(alpha = 0.2, fill = "red") + 
+  labs(title = "Histograma de la estatura", x = "Estatura (cm)", y = "Recuento")
+```
+
+### 5. Realiza un histograma de la variable estatura agrupada por género. ¿Encuentras alguna asociación entre ambas variables?
+
+Como ultimas modificaciones, para hacer nuestra grafica mas estetica, podemos cambiar la leyenda utilizando scale_color_discrete(). 
+```{r}
+# Sobreponer otra variable en el histograma de densidad
+data$gender <- as.character(data$gender)
+ggplot(data, aes(x = height, color = gender)) + 
+  geom_histogram(binwidth = 2.5) +
+  labs(title = "Histograma de la altura", x = "Estatura (cm)", y = "Recuento") + 
+  scale_color_discrete(name = "Genero", labels = c("Mujer", "Hombre")) 
+```
+
+```
+El promedio de la estatura de los hombres es mayor al promedio de la estatura de las mujeres. Esto se refleja en la distribución que tiene cada genero. 
+```
+
+### 6. Realiza una gráfica de dispersión con las variables tensión arterial sistólica y tensión arterial diastólica (limita el eje x a 250 y el eje y a 200). Coloca una línea de regresión encima. ¿Encuentras alguna asociación entre las variables?
+
+```{r}
+# Dibujar una grafica de dispersion, incluyendo regresion lineal
+ggplot(data, aes(x = ap_hi, y = ap_lo)) +
+  geom_point() + geom_smooth(method = lm) +
+  xlim(0,250) + ylim(0,200) + 
+  labs(title = "Grafica de dispersion entre tension arterial sistolica y tension arterial diastolica", x = "TA Sistolica", y = "TA Diastolica")
+```
+
+```
+La regresión lineal indica que la TA Diastólica aumenta de forma proporcional cuando la TA Sistólica se incrementa.
+```
+
+### 7. Realiza una gráfica de dispersión con las variables tensión arterial sistólica y tensión arterial diastólica (limita el eje x a 250 y el eje y a 200), agrupada por la presencia o ausencia de una enfermedad cardiovascular. ¿Qué relación crees que existe entre estas tres variables?
+
+```{r}
+# Sobreponer otra variable en la grafica de dispersion
+data$cardio <- as.character(data$cardio)
+ggplot(data, aes(x = ap_hi, y = ap_lo, color = cardio)) +
+  geom_point() +
+  xlim(0,250) + ylim(0,200) + 
+  labs(title = "Grafica de dispersion entre tension arterial sistolica y tension arterial diastolica", x = "TA Sistolica", y = "TA Diastolica") + 
+  scale_color_discrete(name = "Enfermedad cardiovascular", labels = c("No", "Si"))
+```
+
+```
+Aquellos pacientes que tienen una TA Sistólica más alta (lo cual significa también una TA Diastólica más alta) son más propensos a padecer enfermedades cardiovasculares.
+```
+
+### 8. Realiza un boxplot con la variable peso y la variable de enfermedad cardiovascular. ¿Qué puedes deducir sobre el peso de los pacientes con enfermedades cardiovasculares?
+
+```{r}
+# Dibujar un boxplot que separa por categoria de enfermedad cardiovascular
+ggplot(data, aes(x = cardio, y = weight, color = cardio)) + 
+  geom_boxplot() + 
+  theme(legend.position = "none") +
+  labs(title = "Boxplot del peso y enfermedad cardiovascular", x = "Enfermedad Cardiovascular", y = "Peso (kg)") +
+  scale_x_discrete(labels = c("No", "Sí"))
+```
+
+```
+Los pacientes que padecen enfermedad cardiovascular poseen en promedio un peso ligeramente mayor al de aquellos individuos que no presentan enfremedad cardiovascular.
+```
+
+### 9. Realiza un boxplot con la variable peso y la variable de enfermedad cardiovascular, agrupadas por la variable “fumar”. ¿Qué relación existe entre las tres variables?
+
+```{r}
+# Agregar una variable mas a la grafica de boxplot
+data$smoke <- as.character(data$smoke)
+ggplot(data, aes(x = cardio, y = weight, color = smoke)) + 
+  geom_boxplot() + 
+  labs(title = "Boxplot del peso y enfermedad cardiovascular", x = "Enfermedad cardiovascular", y = "Peso (kg)") + 
+  scale_color_discrete(name = "Fuma", labels = c("No", "Sí")) + 
+  scale_x_discrete(labels = c("No", "Sí"))
+```
+
+```
+Aquellos pacientes que fuman y tienen enfermedad cardiovascular tienen en promedio un peso mayor a los individuos que no fuman y son sanos.
+```
+
+### 10. Realiza un heatmap de la edad en años, la presión arterial sistólica, la presión arterial diastólica, la estatura y el peso, contra los grupos obtenidos de las combinaciones entre las variables colesterol y enfermedad cardiovascular (debes obtener un heatmap de 6x5). 
+
+```{r}
+# Seleccionar algunas variables cuantitativas para representar en el heatmap
+data$age_year <- round(data$age_year, 0)
+hm_data <- aggregate(data[,c(3, 5, 6, 7, 8)],  
+          by = list(data$cholesterol, data$cardio), 
+          median, na.rm = T) 
+
+# Transformar al formato long
+hm_data$Group.1 <- paste(hm_data$Group.1, hm_data$Group.2, sep = ":")
+hm_data <- reshape(hm_data, 
+                   direction = "long", 
+                   varying = list(names(hm_data)[3:7]),
+                   v.names = "Value", 
+                   idvar = "Group.1",
+                   timevar = "Variable", 
+                   times = colnames(hm_data)[3:7])
+row.names(hm_data) <- NULL
+
+# Dibujar la grafica de heatmap
+ggplot(hm_data, aes(x = Variable, y = Group.1, fill = Value)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "forestgreen", high = "red", mid = "gold", midpoint = median(hm_data$Value)) +
+  labs(title = "Heatmap de variables por nivel de colesterol", fill = "Valor", y = "Grupo de nivel de colesterol", x = "Variable") +
+  scale_y_discrete(labels = c("Normal y sano", "Normal y enfermo", "Arriba de lo normal y sano", "Arriba de lo normal y enfermo", "Muy arriba de lo normal y sano", "Muy arriba de lo normal y enfermo")) +
+  scale_x_discrete(labels = c("Edad", "TAS", "TAD", "Estatura", "Peso"))
+```
